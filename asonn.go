@@ -29,7 +29,8 @@ func BuildAgds(x [][]string, y []string) (Asonn){
 			continue // Feature names in first row, skip data with no class
 		}
 		objectNode := NewNode("O" + strconv.Itoa(i))
-		for j, value := range row {
+		for j, strValue := range row {
+			value := convertToCorrectType(strValue)
 			newNode, reused := tryToReuseNode(value, asonn.Nodes, j)
 			addConnection(newNode, &objectNode)
 			if !reused {
@@ -37,7 +38,8 @@ func BuildAgds(x [][]string, y []string) (Asonn){
 				asonn.Nodes = append(asonn.Nodes, newNode)
 			}
 		}
-		classNode, reused := tryToReuseClassNode(y[i], classNodes)
+		value := convertToCorrectType(y[i])
+		classNode, reused := tryToReuseClassNode(value, classNodes)
 		addConnection(classNode, &objectNode)
 		if !reused {
 			asonn.Nodes = append(asonn.Nodes, &objectNode)
@@ -64,7 +66,7 @@ func areConnected(first *Node, second *Node) (bool) {
 	return false
 }
 
-func tryToReuseNode(value string, nodes []*Node, i int) (*Node, bool) {
+func tryToReuseNode(value interface{}, nodes []*Node, i int) (*Node, bool) {
 	for _, node := range nodes {
 		if node.Value == value && areConnected(node, nodes[i]) {
 			return node, true
@@ -74,7 +76,7 @@ func tryToReuseNode(value string, nodes []*Node, i int) (*Node, bool) {
 	return &newNode, false
 }
 
-func tryToReuseClassNode(value string, nodes []*Node) (*Node, bool) {
+func tryToReuseClassNode(value interface{}, nodes []*Node) (*Node, bool) {
 	for _, node := range nodes {
 		if node.Value == value {
 			return node, true
@@ -82,4 +84,14 @@ func tryToReuseClassNode(value string, nodes []*Node) (*Node, bool) {
 	}
 	newNode := NewNode(value)
 	return &newNode, false
+}
+
+func convertToCorrectType(value string) interface{} {
+	if intValue, err := strconv.Atoi(value); err == nil {
+		return intValue
+	}
+	if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+		return floatValue
+	}
+	return value
 }
