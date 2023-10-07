@@ -5,26 +5,25 @@ import (
 	"strconv"
 )
 
-
 type Asonn struct {
 	Nodes []*Node
 }
 
 type Node struct {
-	Value 		interface{}
-	Connections	ConnectionSlice
-	Type		string
+	Value       interface{}
+	Connections ConnectionSlice
+	Type        string
 }
 
 const (
-    Value 	= "Value"
-    Object  = "Object"
-    Feature = "Feature"
+	Value   = "Value"
+	Object  = "Object"
+	Feature = "Feature"
 	Class   = "Class"
 )
 
-func NewNode(value interface{}, nodeType string) (Node) {
-		return Node{Value: value, Type: nodeType}
+func NewNode(value interface{}, nodeType string) Node {
+	return Node{Value: value, Type: nodeType}
 }
 
 type ConnectionSlice []Connection
@@ -46,7 +45,6 @@ func (connectionSlice ConnectionSlice) Less(i, j int) bool {
 	if firstOk && secondOk {
 		return firstVal > secondVal
 	}
-
 	return true // For non numeric types order doesn't matter
 }
 
@@ -55,8 +53,8 @@ func (node Node) sortConnections() {
 }
 
 type Connection struct {
-	Node	*Node
-	Weight	float32
+	Node   *Node
+	Weight float32
 }
 
 func NewConnection(node *Node, weight float32) Connection {
@@ -74,7 +72,7 @@ func BuildAgds(x [][]string, y []string) Asonn {
 		if i == 0 || y[i] == "" {
 			continue // Feature names in first row, skip data with no class
 		}
-		objectNode := NewNode("O" + strconv.Itoa(i), Object)
+		objectNode := NewNode("O"+strconv.Itoa(i), Object)
 		for j, strValue := range row {
 			value := convertToCorrectType(strValue)
 			newNode, reused := tryToReuseNode(value, asonn.Nodes, j)
@@ -107,13 +105,12 @@ func addConnection(first *Node, second *Node) {
 	second.Connections = append(second.Connections, NewConnection(first, 1))
 }
 
-func areConnected(first *Node, second *Node) (bool) {
+func areConnected(first *Node, second *Node) bool {
 	for _, connection := range first.Connections {
 		if connection.Node == second {
 			return true
 		}
 	}
-
 	return false
 }
 
