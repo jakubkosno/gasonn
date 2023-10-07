@@ -10,11 +10,20 @@ type Asonn struct {
 
 type Node struct {
 	Value 		interface{}
-	Connections	[]*Node
+	Connections	[]Connection
 }
 
 func NewNode(value interface{}) Node {
 	return Node{Value: value}
+}
+
+type Connection struct {
+	Node	*Node
+	Weight	float32
+}
+
+func NewConnection(node *Node, weight float32) Connection {
+	return Connection{Node: node, Weight: weight}
 }
 
 func BuildAgds(x [][]string, y []string) (Asonn){
@@ -52,13 +61,13 @@ func BuildAgds(x [][]string, y []string) (Asonn){
 }
 
 func addConnection(first *Node, second *Node) {
-	first.Connections = append(first.Connections, second)
-	second.Connections = append(second.Connections, first)
+	first.Connections = append(first.Connections, NewConnection(second, 1))
+	second.Connections = append(second.Connections, NewConnection(first, 1))
 }
 
 func areConnected(first *Node, second *Node) (bool) {
-	for _, node := range first.Connections {
-		if node == second {
+	for _, connection := range first.Connections {
+		if connection.Node == second {
 			return true
 		}
 	}
@@ -90,7 +99,7 @@ func convertToCorrectType(value string) interface{} {
 	if intValue, err := strconv.Atoi(value); err == nil {
 		return intValue
 	}
-	if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+	if floatValue, err := strconv.ParseFloat(value, 32); err == nil {
 		return floatValue
 	}
 	return value
