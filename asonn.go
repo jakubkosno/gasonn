@@ -9,7 +9,7 @@ type Asonn struct {
 	Nodes []*Node
 }
 
-func (asonn Asonn) addAsimConnections() {
+func (asonn Asonn) addAsimAndAdefConnections() {
 	for i := range asonn.Nodes {
 		if asonn.Nodes[i].Type == Feature {
 			// Check if value is numeric
@@ -25,8 +25,55 @@ func (asonn Asonn) addAsimConnections() {
 					addConnection(asonn.Nodes[i].Connections[j].Node, asonn.Nodes[i].Connections[j+1].Node, weight)
 				}
 			}
+			if asonn.Nodes[i].Type == Object {
+				denominator := 0.0
+				for j := range asonn.Nodes[i].Connections {
+					if asonn.Nodes[i].Connections[j].Node.Type == Value {
+						denominator += float64(countObjectConnectionsFromClass(asonn.Nodes[i].Connections[j].Node, getClassOfObject(asonn.Nodes[i]))) / float64(countObjectConnections(asonn.Nodes[i].Connections[j].Node))
+					}
+				}
+				for j := range asonn.Nodes[i].Connections {
+					if asonn.Nodes[i].Connections[j].Node.Type == Value {
+						weight := (float64(countObjectConnectionsFromClass(asonn.Nodes[i].Connections[j].Node, getClassOfObject(asonn.Nodes[i]))) / float64(countObjectConnections(asonn.Nodes[i].Connections[j].Node))) / denominator
+						asonn.Nodes[i].Connections[j].Weight = weight
+					}
+				}
+			}
 		}
 	}
+}
+
+func countObjectConnections(node *Node) int {
+	counter := 0
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Object {
+			counter += 1
+		}
+	}
+	return counter
+}
+
+func countObjectConnectionsFromClass(node *Node, class string) int {
+	counter := 0
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Object {
+			for j := range node.Connections[i].Node.Connections {
+				if node.Connections[i].Node.Connections[j].Node.Type == Class && node.Connections[i].Node.Connections[j].Node.Value == class {
+					counter += 1
+				}
+			}
+		}
+	}
+	return counter
+}
+
+func getClassOfObject(node *Node) string {
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Class {
+			return node.Connections[i].Node.Value.(string)
+		}
+	}
+	return ""
 }
 
 type Node struct {
@@ -117,7 +164,7 @@ func BuildAgds(x [][]string, y []string) Asonn {
 			node.sortConnections()
 		}
 	}
-	asonn.addAsimConnections()
+	asonn.addAsimAndAdefConnections()
 	return asonn
 }
 
