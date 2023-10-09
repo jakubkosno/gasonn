@@ -46,6 +46,13 @@ func TestBuildAgds(t *testing.T) {
 					t.Errorf("Connections not sorted")
 				}
 			}
+			if node.Type == Value {
+				for _, connection := range node.Connections {
+					if connection.Weight < 0 || connection.Weight > 1 {
+						t.Errorf("Incorrect connection weight")
+					}
+				}
+			}
 		}
 	}
 }

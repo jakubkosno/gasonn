@@ -9,6 +9,26 @@ type Asonn struct {
 	Nodes []*Node
 }
 
+func (asonn Asonn) addAsimConnections() {
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Feature {
+			// Check if value is numeric
+			maxVal, maxOk := asonn.Nodes[i].Connections[len(asonn.Nodes[i].Connections)-1].Node.Value.(float64)
+			minVal, minOk := asonn.Nodes[i].Connections[0].Node.Value.(float64)
+			if minOk && maxOk {
+				valRange := maxVal - minVal
+				for j := range asonn.Nodes[i].Connections {
+					if j == len(asonn.Nodes[i].Connections)-1 {
+						break
+					}
+					weight := (valRange - (asonn.Nodes[i].Connections[j+1].Node.Value.(float64) - asonn.Nodes[i].Connections[j].Node.Value.(float64))) / valRange
+					addConnection(asonn.Nodes[i].Connections[j].Node, asonn.Nodes[i].Connections[j+1].Node, weight)
+				}
+			}
+		}
+	}
+}
+
 type Node struct {
 	Value       interface{}
 	Connections ConnectionSlice
@@ -40,8 +60,8 @@ func (connectionSlice ConnectionSlice) Swap(i, j int) {
 
 // Implement Less from sort.Interface for ConnectionSlice
 func (connectionSlice ConnectionSlice) Less(i, j int) bool {
-	firstVal, firstOk := connectionSlice[i].Node.Value.(float32)
-	secondVal, secondOk := connectionSlice[j].Node.Value.(float32)
+	firstVal, firstOk := connectionSlice[i].Node.Value.(float64)
+	secondVal, secondOk := connectionSlice[j].Node.Value.(float64)
 	if firstOk && secondOk {
 		return firstVal > secondVal
 	}
@@ -54,10 +74,10 @@ func (node Node) sortConnections() {
 
 type Connection struct {
 	Node   *Node
-	Weight float32
+	Weight float64
 }
 
-func NewConnection(node *Node, weight float32) Connection {
+func NewConnection(node *Node, weight float64) Connection {
 	return Connection{Node: node, Weight: weight}
 }
 
@@ -76,15 +96,15 @@ func BuildAgds(x [][]string, y []string) Asonn {
 		for j, strValue := range row {
 			value := convertToCorrectType(strValue)
 			newNode, reused := tryToReuseNode(value, asonn.Nodes, j)
-			addConnection(newNode, &objectNode)
+			addConnection(newNode, &objectNode, 1)
 			if !reused {
-				addConnection(newNode, asonn.Nodes[j])
+				addConnection(newNode, asonn.Nodes[j], 1)
 				asonn.Nodes = append(asonn.Nodes, newNode)
 			}
 		}
 		value := convertToCorrectType(y[i])
 		classNode, reused := tryToReuseClassNode(value, classNodes)
-		addConnection(classNode, &objectNode)
+		addConnection(classNode, &objectNode, 1)
 		if !reused {
 			asonn.Nodes = append(asonn.Nodes, &objectNode)
 			classNodes = append(classNodes, classNode)
@@ -97,12 +117,13 @@ func BuildAgds(x [][]string, y []string) Asonn {
 			node.sortConnections()
 		}
 	}
+	asonn.addAsimConnections()
 	return asonn
 }
 
-func addConnection(first *Node, second *Node) {
-	first.Connections = append(first.Connections, NewConnection(second, 1))
-	second.Connections = append(second.Connections, NewConnection(first, 1))
+func addConnection(first *Node, second *Node, weight float64) {
+	first.Connections = append(first.Connections, NewConnection(second, weight))
+	second.Connections = append(second.Connections, NewConnection(first, weight))
 }
 
 func areConnected(first *Node, second *Node) bool {
@@ -138,7 +159,7 @@ func convertToCorrectType(value string) interface{} {
 	if intValue, err := strconv.Atoi(value); err == nil {
 		return intValue
 	}
-	if floatValue, err := strconv.ParseFloat(value, 32); err == nil {
+	if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
 		return floatValue
 	}
 	return value
