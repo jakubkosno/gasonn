@@ -7,30 +7,30 @@ import (
 	"testing"
 )
 
-type buildAgdsTestData struct {
+type buildAsonnTestData struct {
 	datasetName string
 	nodesNumber int
 }
 
-var buildAgdsTests = []buildAgdsTestData{
-	buildAgdsTestData{"iris", 283},
-	buildAgdsTestData{"car", 1763},
-	buildAgdsTestData{"chess", 3309},
-	buildAgdsTestData{"ecoli", 702},
-	buildAgdsTestData{"monk1", 583},
+var buildAsonnTests = []buildAsonnTestData{
+	buildAsonnTestData{"iris", 283},
+	buildAsonnTestData{"car", 1763},
+	buildAsonnTestData{"chess", 3309},
+	buildAsonnTestData{"ecoli", 702},
+	buildAsonnTestData{"monk1", 583},
 }
 
-func TestBuildAgds(t *testing.T) {
-	for _, testData := range buildAgdsTests {
+func TestBuildAsonn(t *testing.T) {
+	for _, testData := range buildAsonnTests {
 		x, y, err := pmlb.FetchXYData(testData.datasetName)
 		if err != nil {
 			fmt.Println(err)
 		}
-		agds := BuildAgds(x, y)
-		if len(agds.Nodes) != testData.nodesNumber {
-			t.Errorf("Created %d nodes instead of %d", len(agds.Nodes), testData.nodesNumber)
+		asonn := BuildAsonn(x, y)
+		if len(asonn.Nodes) != testData.nodesNumber {
+			t.Errorf("Created %d nodes instead of %d", len(asonn.Nodes), testData.nodesNumber)
 		}
-		for _, node := range agds.Nodes {
+		for _, node := range asonn.Nodes {
 			if node.Type == Feature {
 				var numbers []float32
 				for _, connection := range node.Connections {
