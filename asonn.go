@@ -236,6 +236,11 @@ func (asonn Asonn) expandCombination(node *Node) error {
 			asonn.addRepresentedObjects(node)
 		}
 	}
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Range {
+			reduceRange(node.Connections[i].Node)
+		}
+	}
 	return nil
 }
 
@@ -318,6 +323,20 @@ func (asonn Asonn) addRepresentedObjects(node *Node) {
 	}
 }
 
+func (asonn Asonn) getFirstNotRepresentedObjectIndex() int {
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Object {
+			for j := range asonn.Nodes[i].Connections {
+				if asonn.Nodes[i].Connections[j].Node.Type == Combination {
+					break
+				}
+			}
+			return i
+		}
+	}
+	return -1
+}
+
 func countObjectConnections(node *Node) int {
 	counter := 0
 	for i := range node.Connections {
@@ -342,20 +361,6 @@ func countObjectConnectionsFromClass(node *Node, class string) int {
 	return counter
 }
 
-func (asonn Asonn) getFirstNotRepresentedObjectIndex() int {
-	for i := range asonn.Nodes {
-		if asonn.Nodes[i].Type == Object {
-			for j := range asonn.Nodes[i].Connections {
-				if asonn.Nodes[i].Connections[j].Node.Type == Combination {
-					break
-				}
-			}
-			return i
-		}
-	}
-	return -1
-}
-
 func getClassOfObject(node *Node) string {
 	for i := range node.Connections {
 		if node.Connections[i].Node.Type == Class {
@@ -372,6 +377,15 @@ func getBiggerCorrelation(currentMax []int, pretender []int) ([]int, bool) {
 		}
 	}
 	return currentMax, false
+}
+
+func reduceRange(node *Node) {
+	if node.Type == Range {
+		min, max, err := minMax(node.Value.([]interface{}))
+		if err == nil {
+			node.Value = [2]interface{}{min, max}
+		}
+	}
 }
 
 func minMax(slice []interface{}) (interface{}, interface{}, error) {
