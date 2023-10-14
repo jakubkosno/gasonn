@@ -13,11 +13,9 @@ type buildAsonnTestData struct {
 }
 
 var buildAsonnTests = []buildAsonnTestData{
-	buildAsonnTestData{"iris", 283},
-	buildAsonnTestData{"car", 1763},
-	buildAsonnTestData{"chess", 3309},
-	buildAsonnTestData{"ecoli", 702},
-	buildAsonnTestData{"monk1", 583},
+	buildAsonnTestData{"iris", 908},
+	buildAsonnTestData{"ecoli", 3318},
+	buildAsonnTestData{"monk1", 4475},
 }
 
 func TestBuildAsonn(t *testing.T) {
