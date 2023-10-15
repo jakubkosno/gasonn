@@ -14,9 +14,9 @@ type buildAsonnTestData struct {
 }
 
 var buildAsonnTests = []buildAsonnTestData{
-	{"iris", 903},
-	{"ecoli", 3318},
-	{"monk1", 4475},
+	{"iris", 627},
+	{"ecoli", 2628},
+	{"monk1", 3900},
 }
 
 func TestBuildAsonn(t *testing.T) {

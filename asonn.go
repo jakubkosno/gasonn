@@ -49,6 +49,7 @@ func BuildAsonn(x [][]string, y []string) Asonn {
 	}
 	asonn.addAsimAndAdefConnections()
 	asonn.addCombinations()
+	asonn.removeValueAndObjectNodes()
 	return asonn
 }
 
@@ -437,6 +438,16 @@ func (asonn Asonn) expandWith(node *Node, rangeNode *Node, combinationNode *Node
 		return true
 	}
 	return false
+}
+
+func (asonn *Asonn) removeValueAndObjectNodes() {
+	var filtered []*Node
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type != Value && asonn.Nodes[i].Type != Object {
+			filtered = append(filtered, asonn.Nodes[i])
+		}
+	}
+	asonn.Nodes = filtered
 }
 
 func (asonn Asonn) calculate_7_16(node *Node, rangeNode *Node) float64 {
