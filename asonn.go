@@ -2,6 +2,7 @@ package gasonn
 
 import (
 	"errors"
+	"math"
 	"sort"
 	"strconv"
 )
@@ -236,6 +237,19 @@ func (asonn Asonn) expandCombination(node *Node) error {
 			asonn.addRepresentedObjects(node)
 		}
 	}
+	possibleExpansions, err := asonn.getPossibleExpansions(node)
+	if err != nil {
+		return err
+	}
+	coefficients := make(map[*Node]float64)
+	for i := range possibleExpansions {
+		if possibleExpansions[i].Smaller != nil {
+			coefficients[possibleExpansions[i].Smaller], err = asonn.calculateMinusCoefficient(possibleExpansions[i].Range)
+		}
+		if possibleExpansions[i].Bigger != nil {
+			coefficients[possibleExpansions[i].Bigger], err = asonn.calculatePlusCoefficient(possibleExpansions[i].Range)
+		}
+	}
 	for i := range node.Connections {
 		if node.Connections[i].Node.Type == Range {
 			reduceRange(node.Connections[i].Node)
@@ -321,6 +335,164 @@ func (asonn Asonn) addRepresentedObjects(node *Node) {
 			}
 		}
 	}
+}
+
+func (asonn Asonn) calculateMinusCoefficient(node *Node) (float64, error) {
+	if node.Type != Range {
+		return 0.0, errors.New("Not a range node")
+	}
+	var smallerValues []*Node
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Feature {
+			for j := range node.Connections[i].Node.Connections {
+				nodeVal, _ := convertToFloat64(node.Connections[i].Node.Connections[j].Node.Value)
+				rangeMin, _ := convertToFloat64(node.Value.([]interface{})[0])
+				if node.Connections[i].Node.Connections[j].Node.Type == Value && nodeVal < rangeMin {
+					smallerValues = append(smallerValues, node.Connections[i].Node.Connections[j].Node)
+				}
+			}
+		}
+	}
+	coefficient := 0.0
+	for i := range smallerValues {
+		coefficient += asonn.calculate_7_16(smallerValues[i], node)
+	}
+	return coefficient, nil
+}
+
+func (asonn Asonn) calculatePlusCoefficient(node *Node) (float64, error) {
+	if node.Type != Range {
+		return 0.0, errors.New("Not a range node")
+	}
+	var biggerValues []*Node
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Feature {
+			for j := range node.Connections[i].Node.Connections {
+				nodeVal, _ := convertToFloat64(node.Connections[i].Node.Connections[j].Node.Value)
+				rangeMax := max(node.Value.([]float64))
+				if node.Connections[i].Node.Connections[j].Node.Type == Value && nodeVal > rangeMax {
+					biggerValues = append(biggerValues, node.Connections[i].Node.Connections[j].Node)
+				}
+			}
+		}
+	}
+	coefficient := 0.0
+	for i := range biggerValues {
+		coefficient += asonn.calculate_7_17(biggerValues[i], node)
+	}
+	return coefficient, nil
+}
+
+func (asonn Asonn) calculate_7_16(node *Node, rangeNode *Node) float64 {
+	return asonn.calculate_7_18(node, rangeNode) *
+		(asonn.calculate_7_20(node) - asonn.calculate_7_21(node, rangeNode))
+}
+
+func (asonn Asonn) calculate_7_17(node *Node, rangeNode *Node) float64 {
+	return asonn.calculate_7_19(node, rangeNode) *
+		(asonn.calculate_7_20(node) - asonn.calculate_7_21(node, rangeNode))
+}
+
+func (asonn Asonn) calculate_7_18(node *Node, rangeNode *Node) float64 {
+	nodeValue, _ := convertToFloat64(node.Value)
+	rangeMin, _, _ := minMax(rangeNode.Value.([]interface{}))
+	minVal, _ := convertToFloat64(rangeMin)
+	featureRange, _ := getFeatureRange(rangeNode)
+	return math.Pow(1-(nodeValue-minVal)/featureRange, 2)
+}
+
+func (asonn Asonn) calculate_7_19(node *Node, rangeNode *Node) float64 {
+	nodeValue, _ := convertToFloat64(node.Value)
+	_, rangeMax, _ := minMax(rangeNode.Value.([]interface{}))
+	maxVal, _ := convertToFloat64(rangeMax)
+	featureRange, _ := getFeatureRange(rangeNode)
+	return math.Pow(1-(maxVal-nodeValue)/featureRange, 2)
+}
+
+func getFeatureRange(node *Node) (float64, error) {
+	if node.Type != Value && node.Type != Range {
+		return 0, errors.New("Not a value or range node")
+	}
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Feature {
+			minVal, _ := convertToFloat64(node.Connections[i].Node.Connections[0].Node.Value)
+			maxVal, _ := convertToFloat64(node.Connections[i].Node.Connections[0].Node.Value)
+			for j := range node.Connections[i].Node.Connections {
+				newVal, _ := convertToFloat64(node.Connections[i].Node.Connections[j].Node.Value)
+				if newVal < minVal {
+					minVal = newVal
+				} else if newVal > maxVal {
+					maxVal = newVal
+				}
+			}
+			return maxVal - minVal, nil
+		}
+	}
+	return 0, errors.New("Range not found")
+}
+
+func (asonn Asonn) calculate_7_20(node *Node) float64 {
+	return math.Pow(1/(1+asonn.countCombinationConnections(node)), 2)
+}
+
+func (asonn Asonn) calculate_7_21(node *Node, rangeNode *Node) float64 {
+	result := math.Pow((1+asonn.calculate_7_25(node, rangeNode))/asonn.getFeaturesNumber(), 1)
+	return result
+}
+
+func (asonn Asonn) getFeaturesNumber() float64 {
+	counter := 0.0
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Feature {
+			counter += 1
+		}
+	}
+	return counter
+}
+
+func (asonn Asonn) countCombinationConnections(node *Node) float64 {
+	counter := 0.0
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Combination {
+			counter += 1
+		}
+	}
+	return counter
+}
+
+func (asonn Asonn) calculate_7_25(node *Node, rangeNode *Node) float64 {
+	counter := 0.0
+	// node should be Object type
+	// rangeNode should be Range type
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Value {
+			val, _ := convertToFloat64(node.Connections[i].Node.Value)
+			if val <= max(rangeNode.Value.([]float64)) && val >= min(rangeNode.Value.([]float64)) {
+				counter += 1
+			}
+		}
+	}
+	return counter
+}
+
+func min(values []float64) float64 {
+	minValue := values[0]
+	for _, value := range values {
+		if value < minValue {
+			minValue = value
+		}
+	}
+	return minValue
+}
+
+func max(values []float64) float64 {
+	maxValue := values[0]
+	for _, value := range values {
+		if value > maxValue {
+			maxValue = value
+		}
+	}
+	return maxValue
 }
 
 func (asonn Asonn) getFirstNotRepresentedObjectIndex() int {

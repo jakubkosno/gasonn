@@ -2,9 +2,10 @@ package gasonn
 
 import (
 	"fmt"
-	"github.com/jakubkosno/pmlb"
 	"sort"
 	"testing"
+
+	"github.com/jakubkosno/pmlb"
 )
 
 type buildAsonnTestData struct {
@@ -13,9 +14,9 @@ type buildAsonnTestData struct {
 }
 
 var buildAsonnTests = []buildAsonnTestData{
-	buildAsonnTestData{"iris", 908},
-	buildAsonnTestData{"ecoli", 3318},
-	buildAsonnTestData{"monk1", 4475},
+	{"iris", 908},
+	{"ecoli", 3318},
+	{"monk1", 4475},
 }
 
 func TestBuildAsonn(t *testing.T) {
