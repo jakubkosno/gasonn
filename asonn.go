@@ -241,13 +241,29 @@ func (asonn Asonn) expandCombination(node *Node) error {
 	if err != nil {
 		return err
 	}
-	coefficients := make(map[*Node]float64)
+	var nodeToAdd *Node
+	var rangeToExpand *Node
+	nodeToAdd = nil
+	maxCoeff := math.Inf(-1)
 	for i := range possibleExpansions {
 		if possibleExpansions[i].Smaller != nil {
-			coefficients[possibleExpansions[i].Smaller], err = asonn.calculateMinusCoefficient(possibleExpansions[i].Range)
+			coeff, _ := asonn.calculateMinusCoefficient(possibleExpansions[i].Range)
+			if maxCoeff < coeff {
+				nodeToAdd = possibleExpansions[i].Smaller
+				rangeToExpand = possibleExpansions[i].Range
+			}
 		}
 		if possibleExpansions[i].Bigger != nil {
-			coefficients[possibleExpansions[i].Bigger], err = asonn.calculatePlusCoefficient(possibleExpansions[i].Range)
+			coeff, _ := asonn.calculatePlusCoefficient(possibleExpansions[i].Range)
+			if maxCoeff < coeff {
+				nodeToAdd = possibleExpansions[i].Bigger
+				rangeToExpand = possibleExpansions[i].Range
+			}
+		}
+	}
+	if nodeToAdd != nil && rangeToExpand != nil {
+		if asonn.expandWith(nodeToAdd, rangeToExpand, node) {
+			asonn.addRepresentedObjects(node)
 		}
 	}
 	for i := range node.Connections {
@@ -381,6 +397,46 @@ func (asonn Asonn) calculatePlusCoefficient(node *Node) (float64, error) {
 		coefficient += asonn.calculate_7_17(biggerValues[i], node)
 	}
 	return coefficient, nil
+}
+
+func (asonn Asonn) expandWith(node *Node, rangeNode *Node, combinationNode *Node) bool {
+	var objectWeeds []*Node
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Object {
+			if getClassOfObject(node.Connections[i].Node) != getClassOfObject(combinationNode) {
+				objectWeeds = append(objectWeeds, node.Connections[i].Node)
+			}
+		}
+	}
+	counter := 0.0
+	for i := range objectWeeds {
+		for j := range objectWeeds[i].Connections {
+			var feature interface{}
+			if objectWeeds[i].Connections[j].Node.Type == Value {
+				feature, _ = getFeatureType(objectWeeds[i].Connections[j].Node)
+			} else {
+				continue
+			}
+			for k := range combinationNode.Connections {
+				if combinationNode.Connections[k].Node.Type == Range {
+					if rangeFeature, _ := getFeatureType(combinationNode.Connections[k].Node); rangeFeature == feature {
+						rangeMin, rangeMax, _ := minMax(rangeNode.Value.([]interface{}))
+						rangeMinFloat, _ := convertToFloat64(rangeMin)
+						rangeMaxFloat, _ := convertToFloat64(rangeMax)
+						if val, _ := convertToFloat64(node.Value); val <= rangeMaxFloat && val >= rangeMinFloat {
+							counter += 1
+						}
+					}
+				}
+			}
+		}
+	}
+	if counter != asonn.getFeaturesNumber()-1 {
+		rangeNode.Value = append(rangeNode.Value.([]interface{}), node.Value)
+		addConnection(rangeNode, node, 1)
+		return true
+	}
+	return false
 }
 
 func (asonn Asonn) calculate_7_16(node *Node, rangeNode *Node) float64 {
@@ -786,8 +842,8 @@ func countCommonFeatures(first *Node, second *Node) (int, error) {
 }
 
 func getFeatureType(node *Node) (interface{}, error) {
-	if node.Type != Value {
-		return nil, errors.New("Not a value node")
+	if node.Type != Value && node.Type != Range {
+		return nil, errors.New("Not a value or range node")
 	}
 	for i := range node.Connections {
 		if node.Connections[i].Node.Type == Feature {

@@ -14,7 +14,7 @@ type buildAsonnTestData struct {
 }
 
 var buildAsonnTests = []buildAsonnTestData{
-	{"iris", 908},
+	{"iris", 903},
 	{"ecoli", 3318},
 	{"monk1", 4475},
 }
