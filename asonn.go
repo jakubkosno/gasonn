@@ -100,6 +100,8 @@ func (asonn *Asonn) addCombinations() {
 				rangeNode := NewNode(valRange, Range)
 				addConnection(&combinationNode, &rangeNode, 1)
 				addConnection(&rangeNode, combinationSeed.Connections[j].Node, 1)
+				featureNode, _ := getFeatureConnection(combinationSeed.Connections[j].Node)
+				addConnection(&rangeNode, featureNode, 1)
 				asonn.Nodes = append(asonn.Nodes, &rangeNode)
 			} else if combinationSeed.Connections[j].Node.Type == Class {
 				addConnection(&combinationNode, combinationSeed.Connections[j].Node, 1)
@@ -183,88 +185,92 @@ func (asonn Asonn) expandCombination(node *Node) error {
 	if node.Type != Combination {
 		return errors.New("Tried to expand non combination node")
 	}
-	weedlessExtensionNotDone := true
-	for weedlessExtensionNotDone {
-		weedlessExtensionNotDone = false
+	shouldContinue := true
+	for shouldContinue {
+		weedlessExtensionNotDone := true
+		for weedlessExtensionNotDone {
+			weedlessExtensionNotDone = false
+			possibleExpansions, err := asonn.getPossibleExpansions(node)
+			if err != nil {
+				return err
+			}
+			for i := range possibleExpansions {
+				canExpand := true
+				if possibleExpansions[i].Smaller != nil {
+					for j := range possibleExpansions[i].Range.Value.([]interface{}) {
+						if possibleExpansions[i].Range.Value.([]interface{})[j].(float64) == possibleExpansions[i].Smaller.Value {
+							possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{})[:j], possibleExpansions[i].Range.Value.([]interface{})[j+1:]...)
+						}
+					}
+					for j := range possibleExpansions[i].Smaller.Connections {
+						if possibleExpansions[i].Smaller.Connections[j].Node.Type == Object {
+							if getClassOfObject(possibleExpansions[i].Smaller.Connections[j].Node) != getClassOfObject(node) {
+								canExpand = false
+								break
+							}
+						}
+					}
+					if canExpand {
+						possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{}), possibleExpansions[i].Smaller.Value)
+						addConnection(possibleExpansions[i].Range, possibleExpansions[i].Smaller, 1)
+						weedlessExtensionNotDone = true
+					}
+				}
+				canExpand = true
+				if possibleExpansions[i].Bigger != nil {
+					for j := range possibleExpansions[i].Range.Value.([]interface{}) {
+						if possibleExpansions[i].Range.Value.([]interface{})[j].(float64) == possibleExpansions[i].Bigger.Value {
+							possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{})[:j], possibleExpansions[i].Range.Value.([]interface{})[j+1:]...)
+						}
+					}
+					for j := range possibleExpansions[i].Bigger.Connections {
+						if possibleExpansions[i].Bigger.Connections[j].Node.Type == Object {
+							if getClassOfObject(possibleExpansions[i].Bigger.Connections[j].Node) != getClassOfObject(node) {
+								canExpand = false
+								break
+							}
+						}
+					}
+					if canExpand {
+						possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{}), possibleExpansions[i].Bigger.Value)
+						addConnection(possibleExpansions[i].Range, possibleExpansions[i].Bigger, 1)
+						weedlessExtensionNotDone = true
+					}
+				}
+			}
+			if weedlessExtensionNotDone {
+				asonn.addRepresentedObjects(node)
+			}
+		}
 		possibleExpansions, err := asonn.getPossibleExpansions(node)
 		if err != nil {
 			return err
 		}
+		var nodeToAdd *Node
+		var rangeToExpand *Node
+		nodeToAdd = nil
+		maxCoeff := math.Inf(-1)
+		shouldContinue = false
 		for i := range possibleExpansions {
-			canExpand := true
 			if possibleExpansions[i].Smaller != nil {
-				for j := range possibleExpansions[i].Range.Value.([]interface{}) {
-					if possibleExpansions[i].Range.Value.([]interface{})[j].(float64) == possibleExpansions[i].Smaller.Value {
-						possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{})[:j], possibleExpansions[i].Range.Value.([]interface{})[j+1:]...)
-					}
-				}
-				for j := range possibleExpansions[i].Smaller.Connections {
-					if possibleExpansions[i].Smaller.Connections[j].Node.Type == Object {
-						if getClassOfObject(possibleExpansions[i].Smaller.Connections[j].Node) != getClassOfObject(node) {
-							canExpand = false
-							break
-						}
-					}
-				}
-				if canExpand {
-					possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{}), possibleExpansions[i].Smaller.Value)
-					addConnection(possibleExpansions[i].Range, possibleExpansions[i].Smaller, 1)
-					weedlessExtensionNotDone = true
+				coeff, _ := asonn.calculateMinusCoefficient(possibleExpansions[i].Range)
+				if maxCoeff < coeff {
+					nodeToAdd = possibleExpansions[i].Smaller
+					rangeToExpand = possibleExpansions[i].Range
 				}
 			}
-			canExpand = true
 			if possibleExpansions[i].Bigger != nil {
-				for j := range possibleExpansions[i].Range.Value.([]interface{}) {
-					if possibleExpansions[i].Range.Value.([]interface{})[j].(float64) == possibleExpansions[i].Bigger.Value {
-						possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{})[:j], possibleExpansions[i].Range.Value.([]interface{})[j+1:]...)
-					}
-				}
-				for j := range possibleExpansions[i].Bigger.Connections {
-					if possibleExpansions[i].Bigger.Connections[j].Node.Type == Object {
-						if getClassOfObject(possibleExpansions[i].Bigger.Connections[j].Node) != getClassOfObject(node) {
-							canExpand = false
-							break
-						}
-					}
-				}
-				if canExpand {
-					possibleExpansions[i].Range.Value = append(possibleExpansions[i].Range.Value.([]interface{}), possibleExpansions[i].Bigger.Value)
-					addConnection(possibleExpansions[i].Range, possibleExpansions[i].Bigger, 1)
-					weedlessExtensionNotDone = true
+				coeff, _ := asonn.calculatePlusCoefficient(possibleExpansions[i].Range)
+				if maxCoeff < coeff {
+					nodeToAdd = possibleExpansions[i].Bigger
+					rangeToExpand = possibleExpansions[i].Range
 				}
 			}
 		}
-		if weedlessExtensionNotDone {
-			asonn.addRepresentedObjects(node)
-		}
-	}
-	possibleExpansions, err := asonn.getPossibleExpansions(node)
-	if err != nil {
-		return err
-	}
-	var nodeToAdd *Node
-	var rangeToExpand *Node
-	nodeToAdd = nil
-	maxCoeff := math.Inf(-1)
-	for i := range possibleExpansions {
-		if possibleExpansions[i].Smaller != nil {
-			coeff, _ := asonn.calculateMinusCoefficient(possibleExpansions[i].Range)
-			if maxCoeff < coeff {
-				nodeToAdd = possibleExpansions[i].Smaller
-				rangeToExpand = possibleExpansions[i].Range
+		if nodeToAdd != nil && rangeToExpand != nil {
+			if shouldContinue = asonn.expandWith(nodeToAdd, rangeToExpand, node); shouldContinue {
+				asonn.addRepresentedObjects(node)
 			}
-		}
-		if possibleExpansions[i].Bigger != nil {
-			coeff, _ := asonn.calculatePlusCoefficient(possibleExpansions[i].Range)
-			if maxCoeff < coeff {
-				nodeToAdd = possibleExpansions[i].Bigger
-				rangeToExpand = possibleExpansions[i].Range
-			}
-		}
-	}
-	if nodeToAdd != nil && rangeToExpand != nil {
-		if asonn.expandWith(nodeToAdd, rangeToExpand, node) {
-			asonn.addRepresentedObjects(node)
 		}
 	}
 	for i := range node.Connections {
@@ -363,8 +369,9 @@ func (asonn Asonn) calculateMinusCoefficient(node *Node) (float64, error) {
 		if node.Connections[i].Node.Type == Feature {
 			for j := range node.Connections[i].Node.Connections {
 				nodeVal, _ := convertToFloat64(node.Connections[i].Node.Connections[j].Node.Value)
-				rangeMin, _ := convertToFloat64(node.Value.([]interface{})[0])
-				if node.Connections[i].Node.Connections[j].Node.Type == Value && nodeVal < rangeMin {
+				rangeMin, _, _ := minMax(node.Value.([]interface{}))
+				rangeMinFloat, _ := convertToFloat64(rangeMin)
+				if node.Connections[i].Node.Connections[j].Node.Type == Value && nodeVal < rangeMinFloat {
 					smallerValues = append(smallerValues, node.Connections[i].Node.Connections[j].Node)
 				}
 			}
@@ -386,8 +393,9 @@ func (asonn Asonn) calculatePlusCoefficient(node *Node) (float64, error) {
 		if node.Connections[i].Node.Type == Feature {
 			for j := range node.Connections[i].Node.Connections {
 				nodeVal, _ := convertToFloat64(node.Connections[i].Node.Connections[j].Node.Value)
-				rangeMax := max(node.Value.([]float64))
-				if node.Connections[i].Node.Connections[j].Node.Type == Value && nodeVal > rangeMax {
+				_, rangeMax, _ := minMax(node.Value.([]interface{}))
+				rangeMaxFloat, _ := convertToFloat64(rangeMax)
+				if node.Connections[i].Node.Connections[j].Node.Type == Value && nodeVal > rangeMaxFloat {
 					biggerValues = append(biggerValues, node.Connections[i].Node.Connections[j].Node)
 				}
 			}
@@ -409,8 +417,9 @@ func (asonn Asonn) expandWith(node *Node, rangeNode *Node, combinationNode *Node
 			}
 		}
 	}
-	counter := 0.0
+	canAdd := true
 	for i := range objectWeeds {
+		counter := 0.0
 		for j := range objectWeeds[i].Connections {
 			var feature interface{}
 			if objectWeeds[i].Connections[j].Node.Type == Value {
@@ -421,18 +430,21 @@ func (asonn Asonn) expandWith(node *Node, rangeNode *Node, combinationNode *Node
 			for k := range combinationNode.Connections {
 				if combinationNode.Connections[k].Node.Type == Range {
 					if rangeFeature, _ := getFeatureType(combinationNode.Connections[k].Node); rangeFeature == feature {
-						rangeMin, rangeMax, _ := minMax(rangeNode.Value.([]interface{}))
+						rangeMin, rangeMax, _ := minMax(combinationNode.Connections[k].Node.Value.([]interface{}))
 						rangeMinFloat, _ := convertToFloat64(rangeMin)
 						rangeMaxFloat, _ := convertToFloat64(rangeMax)
-						if val, _ := convertToFloat64(node.Value); val <= rangeMaxFloat && val >= rangeMinFloat {
+						if val, _ := convertToFloat64(objectWeeds[i].Connections[j].Node.Value); val <= rangeMaxFloat && val >= rangeMinFloat {
 							counter += 1
+							if counter == asonn.getFeaturesNumber()-1 {
+								canAdd = false
+							}
 						}
 					}
 				}
 			}
 		}
 	}
-	if counter != asonn.getFeaturesNumber()-1 {
+	if canAdd {
 		rangeNode.Value = append(rangeNode.Value.([]interface{}), node.Value)
 		addConnection(rangeNode, node, 1)
 		return true
@@ -534,7 +546,10 @@ func (asonn Asonn) calculate_7_25(node *Node, rangeNode *Node) float64 {
 	for i := range node.Connections {
 		if node.Connections[i].Node.Type == Value {
 			val, _ := convertToFloat64(node.Connections[i].Node.Value)
-			if val <= max(rangeNode.Value.([]float64)) && val >= min(rangeNode.Value.([]float64)) {
+			minVal, maxVal, _ := minMax(rangeNode.Value.([]interface{}))
+			minValFloat, _ := convertToFloat64(minVal)
+			maxValFloat, _ := convertToFloat64(maxVal)
+			if val <= maxValFloat && val >= minValFloat {
 				counter += 1
 			}
 		}
@@ -637,7 +652,7 @@ func minMax(slice []interface{}) (interface{}, interface{}, error) {
 	min, minErr := convertToFloat64(slice[0])
 	max, maxErr := convertToFloat64(slice[0])
 	if minErr != nil || maxErr != nil {
-		return nil, nil, errors.New("Conversion unsiccessful")
+		return nil, nil, errors.New("Conversion unsuccessful")
 	}
 	for i := range slice {
 		if val, _ := convertToFloat64(slice[i]); val < min {
@@ -859,6 +874,18 @@ func getFeatureType(node *Node) (interface{}, error) {
 	for i := range node.Connections {
 		if node.Connections[i].Node.Type == Feature {
 			return node.Connections[i].Node.Value, nil
+		}
+	}
+	return nil, errors.New("No connection to feature node")
+}
+
+func getFeatureConnection(node *Node) (*Node, error) {
+	if node.Type != Value {
+		return nil, errors.New("Not a value node")
+	}
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Feature {
+			return node.Connections[i].Node, nil
 		}
 	}
 	return nil, errors.New("No connection to feature node")
