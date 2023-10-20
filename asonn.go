@@ -53,6 +53,31 @@ func BuildAsonn(x [][]string, y []string) Asonn {
 	return asonn
 }
 
+func (asonn Asonn) Predict(test [][]string) []float64 {
+	var results []float64
+	features := test[0]
+	values := test[1:]
+	for i := range values {
+		for j := range values[i] {
+			val := convertToCorrectType(values[i][j])
+			asonn.activate(val, features[j])
+		}
+	}
+	return results
+}
+
+func (asonn Asonn) activate(value interface{}, feature string) {
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Feature && asonn.Nodes[i].Value == feature {
+			for j := range asonn.Nodes[i].Connections {
+				if asonn.Nodes[i].Connections[j].Node.Type == Range {
+					asonn.Nodes[i].Connections[j].Node.activate(value)
+				}
+			}
+		}
+	}
+}
+
 func (asonn Asonn) addAsimAndAdefConnections() {
 	for i := range asonn.Nodes {
 		if asonn.Nodes[i].Type == Feature {
@@ -735,6 +760,7 @@ type Node struct {
 	Value       interface{}
 	Connections ConnectionSlice
 	Type        string
+	Activation  float64
 }
 
 const (
@@ -758,6 +784,31 @@ func (node Node) countValueConnections() int {
 		}
 	}
 	return counter
+}
+
+func (node Node) activate(value interface{}) {
+	if node.Type == Range {
+		node.Activation = node.getActivation(value)
+	}
+}
+
+func (node Node) getActivation(value interface{}) float64 {
+	activation := 0.0
+	val, ok := value.(float64)
+	if !ok {
+		valInt := value.(int)
+		val = float64(valInt)
+	}
+	if node.Type == Range {
+		min, _ := node.Value.([2]interface{})[0].(float64)
+		max, _ := node.Value.([2]interface{})[1].(float64)
+		if val >= min && val <= max {
+			activation = 1.0
+		} else {
+			activation = math.Pow(math.E, (1-math.Pow((2*val-max-min)/(max-min), 2))/2)
+		}
+	}
+	return activation
 }
 
 type ConnectionSlice []Connection

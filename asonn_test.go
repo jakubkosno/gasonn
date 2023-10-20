@@ -53,6 +53,7 @@ func TestBuildAsonn(t *testing.T) {
 				}
 			}
 		}
+		_ = asonn.Predict(x)
 	}
 }
 
