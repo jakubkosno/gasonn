@@ -49,6 +49,7 @@ func BuildAsonn(x [][]string, y []string) Asonn {
 	}
 	asonn.addAsimAndAdefConnections()
 	asonn.addCombinations()
+	asonn.updateRangeToCombinationConnectionWeights()
 	asonn.removeValueAndObjectNodes()
 	return asonn
 }
@@ -487,6 +488,24 @@ func (asonn *Asonn) removeValueAndObjectNodes() {
 	asonn.Nodes = filtered
 }
 
+func (asonn Asonn) updateRangeToCombinationConnectionWeights() {
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Combination {
+			denominator := 0.0
+			for j := range asonn.Nodes[i].Connections {
+				if asonn.Nodes[i].Connections[j].Node.Type == Range {
+					denominator += asonn.calculate7_34(asonn.Nodes[i].Connections[j].Node)
+				}
+			}
+			for j := range asonn.Nodes[i].Connections {
+				if asonn.Nodes[i].Connections[j].Node.Type == Range {
+					asonn.Nodes[i].Connections[j].Weight = asonn.calculate7_34(asonn.Nodes[i].Connections[j].Node) / denominator
+				}
+			}
+		}
+	}
+}
+
 func (asonn Asonn) calculate_7_16(node *Node, rangeNode *Node) float64 {
 	return asonn.calculate_7_18(node, rangeNode) *
 		(asonn.calculate_7_20(node) - asonn.calculate_7_21(node, rangeNode))
@@ -542,6 +561,41 @@ func (asonn Asonn) calculate_7_20(node *Node) float64 {
 func (asonn Asonn) calculate_7_21(node *Node, rangeNode *Node) float64 {
 	result := math.Pow((1+asonn.calculate_7_25(node, rangeNode))/asonn.getFeaturesNumber(), 1)
 	return result
+}
+
+func (asonn Asonn) calculate7_34(node *Node) float64 {
+	seeds, weeds := node.countSeedsAndWeeds()
+	var combinationNode *Node
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Combination {
+			combinationNode = node.Connections[i].Node
+		}
+	}
+	allSeeds, _ := combinationNode.countSeedsAndWeeds()
+	return (1 - float64(weeds)/asonn.calculate7_37(combinationNode)) * (asonn.calculate7_36(combinationNode) + float64(seeds)) / (asonn.calculate7_36(combinationNode) + float64(allSeeds))
+}
+
+func (asonn Asonn) calculate7_36(node *Node) float64 {
+	inSNCount := 0
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Object {
+			inSNCount += 1
+		}
+	}
+	return float64(inSNCount) * math.Pow(asonn.getFeaturesNumber(), 2)
+}
+
+func (asonn Asonn) calculate7_37(node *Node) float64 {
+	outSNCount := 0
+	class := getClassOfObject(node)
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Object {
+			if getClassOfObject(asonn.Nodes[i]) != class {
+				outSNCount += 1
+			}
+		}
+	}
+	return float64(outSNCount) * math.Pow(asonn.getFeaturesNumber(), 2)
 }
 
 func (asonn Asonn) getFeaturesNumber() float64 {
@@ -809,6 +863,44 @@ func (node Node) getActivation(value interface{}) float64 {
 		}
 	}
 	return activation
+}
+
+func (node Node) countSeedsAndWeeds() (int, int) {
+	if node.Type == Combination {
+		allSeeds := 0
+		allWeeds := 0
+		for i := range node.Connections {
+			if node.Connections[i].Node.Type == Range {
+				seeds, weeds := node.Connections[i].Node.countSeedsAndWeeds()
+				allSeeds += seeds
+				allWeeds += weeds
+			}
+		}
+		return allSeeds, allWeeds
+	} else {
+		class := ""
+		for i := range node.Connections {
+			if node.Connections[i].Node.Type == Combination {
+				class = getClassOfObject(node.Connections[i].Node)
+			}
+		}
+		seeds := 0
+		weeds := 0
+		for i := range node.Connections {
+			if node.Connections[i].Node.Type == Value {
+				for j := range node.Connections[i].Node.Connections {
+					if node.Connections[i].Node.Connections[j].Node.Type == Object {
+						if class == getClassOfObject(node.Connections[i].Node.Connections[j].Node) {
+							seeds += 1
+						} else {
+							weeds += 1
+						}
+					}
+				}
+			}
+		}
+		return seeds, weeds
+	}
 }
 
 type ConnectionSlice []Connection
