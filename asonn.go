@@ -68,14 +68,21 @@ func (asonn Asonn) Predict(test [][]string) []float64 {
 }
 
 func (asonn Asonn) activate(value interface{}, feature string) {
+	var activated []*Node
 	for i := range asonn.Nodes {
 		if asonn.Nodes[i].Type == Feature && asonn.Nodes[i].Value == feature {
 			for j := range asonn.Nodes[i].Connections {
 				if asonn.Nodes[i].Connections[j].Node.Type == Range {
-					asonn.Nodes[i].Connections[j].Node.activate(value)
+					activatedNode := asonn.Nodes[i].Connections[j].Node.activate(value)
+					if contains(activated, activatedNode) {
+						activated = append(activated, activatedNode)
+					}
 				}
 			}
 		}
+	}
+	for i := range activated {
+		activated[i].activateCombination()
 	}
 }
 
@@ -840,9 +847,25 @@ func (node Node) countValueConnections() int {
 	return counter
 }
 
-func (node Node) activate(value interface{}) {
+func (node Node) activate(value interface{}) *Node {
 	if node.Type == Range {
 		node.Activation = node.getActivation(value)
+	}
+	for i := range node.Connections {
+		if node.Connections[i].Node.Type == Combination {
+			return node.Connections[i].Node
+		}
+	}
+	return nil
+}
+
+func (node Node) activateCombination() {
+	if node.Type == Combination {
+		for i := range node.Connections {
+			if node.Connections[i].Node.Type == Range {
+				node.Activation += node.Connections[i].Node.Activation * node.Connections[i].Weight
+			}
+		}
 	}
 }
 
@@ -1032,4 +1055,13 @@ func getFeatureConnection(node *Node) (*Node, error) {
 		}
 	}
 	return nil, errors.New("No connection to feature node")
+}
+
+func contains(nodes []*Node, combinationNode *Node) bool {
+	for _, node := range nodes {
+		if node.Value == combinationNode.Value {
+			return true
+		}
+	}
+	return false
 }
