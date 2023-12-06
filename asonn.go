@@ -63,6 +63,17 @@ func (asonn Asonn) Predict(test [][]string) []float64 {
 			val := convertToCorrectType(values[i][j])
 			asonn.activate(val, features[j])
 		}
+		maxActivation := -1.0
+		result := 0.0
+		for j := range asonn.Nodes {
+			if asonn.Nodes[j].Type == Combination {
+				if asonn.Nodes[j].Activation > maxActivation {
+					maxActivation = asonn.Nodes[j].Activation
+					result = asonn.Nodes[i].Activation
+				}
+			}
+		}
+		results = append(results, result)
 	}
 	return results
 }
@@ -74,7 +85,7 @@ func (asonn Asonn) activate(value interface{}, feature string) {
 			for j := range asonn.Nodes[i].Connections {
 				if asonn.Nodes[i].Connections[j].Node.Type == Range {
 					activatedNode := asonn.Nodes[i].Connections[j].Node.activate(value)
-					if contains(activated, activatedNode) {
+					if activatedNode != nil && !contains(activated, activatedNode) {
 						activated = append(activated, activatedNode)
 					}
 				}
@@ -847,19 +858,21 @@ func (node Node) countValueConnections() int {
 	return counter
 }
 
-func (node Node) activate(value interface{}) *Node {
+func (node *Node) activate(value interface{}) *Node {
 	if node.Type == Range {
 		node.Activation = node.getActivation(value)
 	}
-	for i := range node.Connections {
-		if node.Connections[i].Node.Type == Combination {
-			return node.Connections[i].Node
+	if node.Activation != 0.0 {
+		for i := range node.Connections {
+			if node.Connections[i].Node.Type == Combination {
+				return node.Connections[i].Node
+			}
 		}
 	}
 	return nil
 }
 
-func (node Node) activateCombination() {
+func (node *Node) activateCombination() {
 	if node.Type == Combination {
 		for i := range node.Connections {
 			if node.Connections[i].Node.Type == Range {
