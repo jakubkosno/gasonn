@@ -59,6 +59,7 @@ func (asonn Asonn) Predict(test [][]string) []float64 {
 	features := test[0]
 	values := test[1:]
 	for i := range values {
+		asonn.resetActivations()
 		for j := range values[i] {
 			val := convertToCorrectType(values[i][j])
 			asonn.activate(val, features[j])
@@ -686,6 +687,12 @@ func (asonn Asonn) getFirstNotRepresentedObjectIndex() int {
 		}
 	}
 	return -1
+}
+
+func (asonn Asonn) resetActivations() {
+	for i := range asonn.Nodes {
+		asonn.Nodes[i].Activation = 0
+	}
 }
 
 func countObjectConnections(node *Node) int {
