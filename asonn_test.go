@@ -2,6 +2,7 @@ package gasonn
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"testing"
 
@@ -53,8 +54,12 @@ func TestBuildAsonn(t *testing.T) {
 				}
 			}
 		}
-		results := asonn.Predict(x)
-		fmt.Println(results)
+		results := asonn.Predict(x[0:20])
+		for _, result := range results {
+			if math.Abs(1-result) > 0.00001 {
+				t.Errorf("Invalid activation for training example")
+			}
+		}
 
 	}
 }
