@@ -54,23 +54,20 @@ func BuildAsonn(x [][]string, y []string) Asonn {
 	return asonn
 }
 
-func (asonn Asonn) Predict(test [][]string) []float64 {
+func (asonn *Asonn) Predict(test [][]string) []float64 {
 	var results []float64
 	features := test[0]
 	values := test[1:]
 	for i := range values {
 		asonn.resetActivations()
-		for j := range values[i] {
-			val := convertToCorrectType(values[i][j])
-			asonn.activate(val, features[j])
-		}
+		asonn.activate(values[i], features)
 		maxActivation := -1.0
 		result := 0.0
 		for j := range asonn.Nodes {
 			if asonn.Nodes[j].Type == Combination {
 				if asonn.Nodes[j].Activation > maxActivation {
 					maxActivation = asonn.Nodes[j].Activation
-					result = asonn.Nodes[i].Activation
+					result = asonn.Nodes[j].Activation
 				}
 			}
 		}
@@ -79,7 +76,22 @@ func (asonn Asonn) Predict(test [][]string) []float64 {
 	return results
 }
 
-func (asonn Asonn) activate(value interface{}, feature string) {
+func (asonn *Asonn) activate(test []string, features []string) {
+	var activated []*Node
+	for i := range test {
+		newActivated := asonn.activateFeature(convertToCorrectType(test[i]), features[i])
+		for j := range newActivated {
+			if !contains(activated, newActivated[j]) {
+				activated = append(activated, newActivated[j])
+			}
+		}
+	}
+	for i := range activated {
+		activated[i].activateCombination()
+	}
+}
+
+func (asonn *Asonn) activateFeature(value interface{}, feature string) []*Node {
 	var activated []*Node
 	for i := range asonn.Nodes {
 		if asonn.Nodes[i].Type == Feature && asonn.Nodes[i].Value == feature {
@@ -93,12 +105,10 @@ func (asonn Asonn) activate(value interface{}, feature string) {
 			}
 		}
 	}
-	for i := range activated {
-		activated[i].activateCombination()
-	}
+	return activated
 }
 
-func (asonn Asonn) addAsimAndAdefConnections() {
+func (asonn *Asonn) addAsimAndAdefConnections() {
 	for i := range asonn.Nodes {
 		if asonn.Nodes[i].Type == Feature {
 			// Check if value is numeric
