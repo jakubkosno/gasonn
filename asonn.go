@@ -1,11 +1,27 @@
-package gasonn
+package main
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
+
+	"github.com/jakubkosno/pmlb"
 )
+
+func main() {
+	datasets := [...]string{"iris", "vowel", "waveform_21", "magic", "adult", "connect_4", "sleep", "kddcup", "poker"}
+	for i := range datasets {
+		fmt.Println(datasets[i])
+		x, y, err := pmlb.FetchXYData(datasets[i])
+		if err != nil {
+			fmt.Println(err)
+		}
+		asonn := BuildAsonn(x, y)
+		asonn.countNodes()
+	}
+}
 
 type Asonn struct {
 	Nodes []*Node
@@ -91,6 +107,17 @@ func (asonn *Asonn) activate(test []string, features []string) {
 	}
 }
 
+func (asonn *Asonn) countNodes() {
+	val := 0
+	fmt.Println("Patterns")
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Combination {
+			val += 1
+		}
+	}
+	fmt.Println(val)
+}
+
 func (asonn *Asonn) activateFeature(value interface{}, feature string) []*Node {
 	var activated []*Node
 	for i := range asonn.Nodes {
@@ -145,6 +172,7 @@ func (asonn *Asonn) addAsimAndAdefConnections() {
 func (asonn *Asonn) addCombinations() {
 	i := 0
 	for asonn.countNotRepresentedObjects() > 0 {
+		fmt.Println(asonn.countNotRepresentedObjects())
 		combinationSeed := asonn.getMostOutCorrelatedObjectNode()
 		combinationNode := NewNode("C"+strconv.Itoa(i), Combination)
 		addConnection(combinationSeed, &combinationNode, 1)
