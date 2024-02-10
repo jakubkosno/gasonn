@@ -11,15 +11,37 @@ import (
 )
 
 func main() {
-	datasets := [...]string{"iris", "vowel", "waveform_21", "magic", "adult", "connect_4", "sleep", "kddcup", "poker"}
+	datasets := [...]string{"magic", "confidence", "analcatdata_bankruptcy", "new_thyroid", "analcatdata_cyyoung9302", "analcatdata_boxing1", "balance_scale", "monk2",
+		"lupus", "biomed", "postoperative_patient_data", "cleve", "iris", "labor", "tae", "prnn_fglass", "lymphography", "analcatdata_boxing2",
+		"analcatdata_creditscore", "haberman", "cleveland_nominal", "analcatdata_germangss", "analcatdata_lawsuit", "breast", "prnn_crabs",
+		"analcatdata_japansolvent", "irish", "glass2", "analcatdata_fraud", "breast_cancer", "car", "glass", "analcatdata_aids", "appendicitis", "dermatology",
+		"heart_c", "schizo", "wine_recognition", "confidence", "lupus", "solar_flare_1", "cars"}
 	for i := range datasets {
 		fmt.Println(datasets[i])
 		x, y, err := pmlb.FetchXYData(datasets[i])
+		var x_train, x_test [][]string
+		var y_train, y_test []string
+		for j := range y {
+			if j%4 == 0 {
+				x_test = append(x_test, x[j])
+				y_test = append(y_test, y[j])
+				if j == 0 {
+					x_train = append(x_train, x[j])
+					y_train = append(y_train, y[j])
+				}
+			} else {
+				x_train = append(x_train, x[j])
+				y_train = append(y_train, y[j])
+			}
+		}
+		//		fmt.Println(y_train)
+		//		fmt.Println(x_train)
 		if err != nil {
 			fmt.Println(err)
 		}
-		asonn := BuildAsonn(x, y)
+		asonn := BuildNewAsonn(x_train, y_train)
 		asonn.countNodes()
+		asonn.PredictMultiLayer(x_test, y_test)
 	}
 }
 
@@ -58,9 +80,9 @@ func BuildAsonn(x [][]string, y []string) Asonn {
 		asonn.Nodes = append(asonn.Nodes, &objectNode)
 	}
 	asonn.Nodes = append(asonn.Nodes, classNodes...)
-	for _, node := range asonn.Nodes {
-		if node.Type == Feature {
-			node.sortConnections()
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Feature {
+			asonn.Nodes[i].sortConnections()
 		}
 	}
 	asonn.addAsimAndAdefConnections()
@@ -68,6 +90,254 @@ func BuildAsonn(x [][]string, y []string) Asonn {
 	asonn.updateRangeToCombinationConnectionWeights()
 	asonn.removeValueAndObjectNodes()
 	return asonn
+}
+
+func BuildNewAsonn(x [][]string, y []string) Asonn {
+	asonn := Asonn{}
+	for _, value := range x[0] {
+		newNode := NewNode(value, Feature)
+		asonn.Nodes = append(asonn.Nodes, &newNode)
+	}
+	var classNodes []*Node
+	for i, row := range x {
+		if i == 0 || y[i] == "" {
+			continue // Feature names in first row, skip data with no class
+		}
+		objectNode := NewNode("O"+strconv.Itoa(i), Object)
+		for j, strValue := range row {
+			value := convertToCorrectType(strValue)
+			newNode, reused := tryToReuseNode(value, asonn.Nodes, j)
+			addConnection(newNode, &objectNode, 1)
+			if !reused {
+				addConnection(newNode, asonn.Nodes[j], 1)
+				asonn.Nodes = append(asonn.Nodes, newNode)
+			}
+		}
+		value := y[i]
+		classNode, reused := tryToReuseClassNode(value, classNodes)
+		addConnection(classNode, &objectNode, 1)
+		if !reused {
+			asonn.Nodes = append(asonn.Nodes, &objectNode)
+			classNodes = append(classNodes, classNode)
+		}
+		asonn.Nodes = append(asonn.Nodes, &objectNode)
+	}
+	asonn.Nodes = append(asonn.Nodes, classNodes...)
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Feature {
+			asonn.Nodes[i].sortConnections()
+		}
+	}
+	asonn.addAsimAndAdefConnections()
+	asonn.addCombinationLayers(classNodes)
+	return asonn
+}
+
+func (asonn *Asonn) addCombinationLayers(classNodes []*Node) {
+	combinationNodes := asonn.addCombinationLayer(classNodes)
+	stop := 0
+	for stop < 1 {
+		combinationNodes = asonn.addCombinationSublayer(classNodes, combinationNodes)
+		if len(combinationNodes) == 0 {
+			stop = 1
+		}
+	}
+}
+
+func (asonn *Asonn) addCombinationLayer(classNodes []*Node) (combinationNodes []*Node) {
+	var newCombinations []*Node
+	for i := range classNodes {
+		combinationNode := NewNode("C"+strconv.Itoa(i), Combination)
+		addConnection(&combinationNode, classNodes[i], 1)
+		var newRanges []*Node
+		initialized := false
+		for j := range classNodes[i].Connections {
+			if classNodes[i].Connections[j].Node.Type == Object {
+				if !initialized {
+					initialized = true
+					for k := range classNodes[i].Connections[j].Node.Connections {
+						if classNodes[i].Connections[j].Node.Connections[k].Node.Type == Value {
+							var valRange []interface{}
+							valRange = append(valRange, classNodes[i].Connections[j].Node.Connections[k].Node.Value)
+							rangeNode := NewNode(valRange, Range)
+							addConnection(&combinationNode, &rangeNode, 1)
+							addConnection(&rangeNode, classNodes[i].Connections[j].Node.Connections[k].Node, 1)
+							featureNode, _ := getFeatureConnection(classNodes[i].Connections[j].Node.Connections[k].Node)
+							addConnection(&rangeNode, featureNode, 1)
+							newRanges = append(newRanges, &rangeNode)
+						}
+					}
+				} else {
+					for k := range classNodes[i].Connections[j].Node.Connections {
+						if classNodes[i].Connections[j].Node.Connections[k].Node.Type == Value {
+							for l := range newRanges {
+								rangeFeature, _ := getFeatureConnection(newRanges[l])
+								nodeFeature, _ := getFeatureConnection(classNodes[i].Connections[j].Node.Connections[k].Node)
+								if rangeFeature.Value == nodeFeature.Value {
+									newRanges[l].Value = append(newRanges[l].Value.([]interface{}), classNodes[i].Connections[j].Node.Connections[k].Node.Value)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		for j := range newRanges {
+			reduceRange(newRanges[j])
+		}
+		asonn.Nodes = append(asonn.Nodes, newRanges...)
+		newCombinations = append(newCombinations, &combinationNode)
+		newRanges = nil
+	}
+	asonn.Nodes = append(asonn.Nodes, newCombinations...)
+	return newCombinations
+}
+
+func (asonn *Asonn) addCombinationSublayer(classNodes []*Node, bigCombinationNodes []*Node) (combinationNodes []*Node) {
+	var newCombinations []*Node
+	for h := range bigCombinationNodes {
+		for i := range classNodes {
+			if getClassOfObject(bigCombinationNodes[h]) == classNodes[i].Value {
+				continue
+			}
+			combinationNode := NewNode("C"+strconv.Itoa(i), Combination)
+			addConnection(&combinationNode, classNodes[i], 1)
+			var newRanges []*Node
+			initialized := false
+			for j := range classNodes[i].Connections {
+				if classNodes[i].Connections[j].Node.Type == Object && classNodes[i].Connections[j].Node.isWithinCombination(bigCombinationNodes[h]) {
+					if !initialized {
+						initialized = true
+						for k := range classNodes[i].Connections[j].Node.Connections {
+							if classNodes[i].Connections[j].Node.Connections[k].Node.Type == Value {
+								var valRange []interface{}
+								valRange = append(valRange, classNodes[i].Connections[j].Node.Connections[k].Node.Value)
+								rangeNode := NewNode(valRange, Range)
+								addConnection(&combinationNode, &rangeNode, 1)
+								addConnection(&rangeNode, classNodes[i].Connections[j].Node.Connections[k].Node, 1)
+								featureNode, _ := getFeatureConnection(classNodes[i].Connections[j].Node.Connections[k].Node)
+								addConnection(&rangeNode, featureNode, 1)
+								newRanges = append(newRanges, &rangeNode)
+							}
+						}
+					} else {
+						for k := range classNodes[i].Connections[j].Node.Connections {
+							if classNodes[i].Connections[j].Node.Connections[k].Node.Type == Value {
+								for l := range newRanges {
+									rangeFeature, _ := getFeatureConnection(newRanges[l])
+									nodeFeature, _ := getFeatureConnection(classNodes[i].Connections[j].Node.Connections[k].Node)
+									if rangeFeature.Value == nodeFeature.Value {
+										newRanges[l].Value = append(newRanges[l].Value.([]interface{}), classNodes[i].Connections[j].Node.Connections[k].Node.Value)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			if initialized {
+				for j := range newRanges {
+					reduceRange(newRanges[j])
+				}
+				asonn.Nodes = append(asonn.Nodes, newRanges...)
+				addOneWayConnection(bigCombinationNodes[h], &combinationNode)
+				newCombinations = append(newCombinations, &combinationNode)
+				newRanges = nil
+			}
+		}
+	}
+	asonn.Nodes = append(asonn.Nodes, newCombinations...)
+	return newCombinations
+}
+
+func (objectNode *Node) isWithinCombination(combinationNode *Node) bool {
+	for i := range combinationNode.Connections {
+		if combinationNode.Connections[i].Node.Type == Range {
+			rangeFeature, _ := getFeatureConnection(combinationNode.Connections[i].Node)
+			for j := range objectNode.Connections {
+				if objectNode.Connections[j].Node.Type == Value {
+					nodeFeature, _ := getFeatureConnection(objectNode.Connections[j].Node)
+					if rangeFeature == nodeFeature {
+						minVal := combinationNode.Connections[i].Node.Value.([2]interface{})[0]
+						maxVal := combinationNode.Connections[i].Node.Value.([2]interface{})[1]
+						val, ok := objectNode.Connections[j].Node.Value.(float64)
+						if !ok {
+							valInt, _ := objectNode.Connections[j].Node.Value.(int32)
+							val = float64(valInt)
+						}
+						if val < minVal.(float64) || val > maxVal.(float64) {
+							return false
+						}
+					}
+				}
+			}
+		}
+	}
+	return true
+}
+
+func (asonn *Asonn) PredictMultiLayer(test [][]string, y_test []string) {
+	features := test[0]
+	values := test[1:]
+	y_test = y_test[1:]
+	all := 0.0
+	correct := 0.0
+	for i := range values {
+		asonn.resetActivations()
+		all += 1
+		result := asonn.classify(values[i], features)
+		if result == y_test[i] {
+			correct += 1
+		}
+		//		fmt.Println(y_test[i])
+		//		fmt.Println(result)
+		//		fmt.Println()
+		//		for j := range asonn.Nodes {
+		//			if asonn.Nodes[j].Type == Combination {
+		//				fmt.Print(getClassOfObject(asonn.Nodes[j]))
+		//				fmt.Print(" ")
+		//				fmt.Print(asonn.Nodes[j].Activation)
+		//				fmt.Println()
+		//			}
+		//		}
+	}
+	fmt.Println(correct / all)
+}
+
+func (asonn *Asonn) classify(test []string, features []string) string {
+	for i := range test {
+		for j := range asonn.Nodes {
+			if asonn.Nodes[j].Type == Combination {
+				for k := range asonn.Nodes[j].Connections {
+					if asonn.Nodes[j].Connections[k].Node.Type == Range {
+						rangeFeature, _ := getFeatureConnection(asonn.Nodes[j].Connections[k].Node)
+						if rangeFeature.Value == features[i] {
+							asonn.Nodes[j].Connections[k].Node.Activation = asonn.Nodes[j].Connections[k].Node.getActivation(test[i])
+							asonn.Nodes[j].Activation += asonn.Nodes[j].Connections[k].Node.Activation * asonn.Nodes[j].Connections[k].Weight
+						}
+					}
+				}
+			}
+		}
+	}
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Combination {
+			for j := range asonn.Nodes[i].Connections {
+				if asonn.Nodes[i].Connections[j].Node.Type == Combination {
+					asonn.Nodes[i].Activation -= asonn.Nodes[i].Connections[j].Node.Activation * math.Pow(asonn.Nodes[i].Connections[j].Node.Activation/asonn.getFeaturesNumber(), 5)
+				}
+			}
+		}
+	}
+	maxActivation := -1.0
+	result := ""
+	for i := range asonn.Nodes {
+		if asonn.Nodes[i].Type == Combination && asonn.Nodes[i].Activation > float64(maxActivation) {
+			result = getClassOfObject(asonn.Nodes[i])
+			maxActivation = asonn.Nodes[i].Activation
+		}
+	}
+	return result
 }
 
 func (asonn *Asonn) Predict(test [][]string) []float64 {
@@ -929,9 +1199,9 @@ func (node *Node) activateCombination() {
 
 func (node Node) getActivation(value interface{}) float64 {
 	activation := 0.0
-	val, ok := value.(float64)
-	if !ok {
-		valInt := value.(int)
+	val, err := strconv.ParseFloat(value.(string), 64)
+	if err != nil {
+		valInt, _ := strconv.Atoi(value.(string))
 		val = float64(valInt)
 	}
 	if node.Type == Range {
@@ -1024,6 +1294,10 @@ func addConnection(first *Node, second *Node, weight float64) {
 	second.Connections = append(second.Connections, NewConnection(first, weight))
 }
 
+func addOneWayConnection(first *Node, second *Node) {
+	first.Connections = append(first.Connections, NewConnection(second, 1))
+}
+
 func areConnected(first *Node, second *Node) bool {
 	for _, connection := range first.Connections {
 		if connection.Node == second {
@@ -1104,7 +1378,7 @@ func getFeatureType(node *Node) (interface{}, error) {
 }
 
 func getFeatureConnection(node *Node) (*Node, error) {
-	if node.Type != Value {
+	if node.Type != Value && node.Type != Range {
 		return nil, errors.New("Not a value node")
 	}
 	for i := range node.Connections {
